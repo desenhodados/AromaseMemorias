@@ -74,3 +74,13 @@ iOS: adicionar em `ios/Runner/Info.plist`:
 
 As fotos ficam na pasta de documentos da app (`recipe_photos/`), as receitas
 guardam só o nome do ficheiro, e o backup inclui as fotos (em base64).
+
+## Se a importação por link falhar
+- `flutter run` (debug) já inclui a permissão de internet; **builds de produção**
+  (`flutter build apk`) só a têm se estiver em `android/app/src/main/AndroidManifest.xml`,
+  como filho direto de `<manifest>`, antes de `<application>`:
+
+      <uses-permission android:name="android.permission.INTERNET"/>
+
+- Depois de editar o manifesto é preciso reconstruir a app (não basta hot reload).
+- A mensagem de erro mostra o "Detalhe técnico" (selecionável) para diagnóstico.
