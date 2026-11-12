@@ -1,0 +1,53 @@
+name: Publicar app web no GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Gerar suporte web
+        run: flutter create . --platforms web --project-name aromas_memorias
+
+      - name: Nome da app na página
+        run: |
+          sed -i 's|<title>.*</title>|<title>Aromas \& Memórias</title>|' web/index.html
+          sed -i 's|"name": ".*"|"name": "Aromas \& Memórias"|; s|"short_name": ".*"|"short_name": "Aromas"|' web/manifest.json
+
+      - run: flutter pub get
+
+      - name: Compilar para web
+        run: flutter build web --release --base-href /AromaseMemorias/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
