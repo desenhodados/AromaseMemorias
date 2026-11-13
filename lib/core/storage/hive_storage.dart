@@ -5,6 +5,8 @@ abstract final class HiveBoxes {
   static const plan = 'plan';
   static const shoppingChecked = 'shopping_checked';
   static const settings = 'settings';
+  static const sectionOverrides = 'section_overrides';
+  static const categories = 'categories';
 }
 
 abstract final class HiveStorage {
@@ -15,6 +17,8 @@ abstract final class HiveStorage {
       Hive.openBox(HiveBoxes.plan),
       Hive.openBox(HiveBoxes.shoppingChecked),
       Hive.openBox(HiveBoxes.settings),
+      Hive.openBox(HiveBoxes.sectionOverrides),
+      Hive.openBox(HiveBoxes.categories),
     ]);
   }
 }

@@ -2,13 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/app_card.dart';
+import '../application/category_providers.dart';
 import '../application/recipe_providers.dart';
 import '../data/photo_picker.dart';
 import '../data/photo_storage.dart';
 import '../domain/cooking_mode.dart';
 import '../domain/recipe.dart';
+import '../domain/recipe_category.dart';
+import 'category_editor_dialog.dart';
 import 'cooking_mode_ui.dart';
+import 'recipe_category_ui.dart';
 import 'recipe_photo.dart';
+
+/// Valor especial do menu de categorias: abre o criador de categorias.
+const _newCategory = '__nova__';
 
 List<String> _splitLines(String text) =>
     text.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
@@ -40,6 +47,7 @@ class _RecipeFormPageState extends ConsumerState<RecipeFormPage> {
   late final _steps = TextEditingController(
     text: widget.recipe?.steps.join('\n'),
   );
+  late final _notes = TextEditingController(text: widget.recipe?.notes);
   late final Set<CookingMode> _modes = {...?widget.recipe?.modes};
   late final String _id =
       widget.recipe?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
@@ -50,6 +58,7 @@ class _RecipeFormPageState extends ConsumerState<RecipeFormPage> {
   late final String? _originalPhoto =
       widget.isNew ? null : widget.recipe?.photoPath;
   String? _photoName;
+  String? _categoryId;
   bool _saved = false;
 
   @override
@@ -57,6 +66,7 @@ class _RecipeFormPageState extends ConsumerState<RecipeFormPage> {
     super.initState();
     _photos = ref.read(photoStorageProvider);
     _photoName = widget.recipe?.photoPath;
+    _categoryId = widget.recipe?.categoryId;
   }
 
   @override
@@ -68,6 +78,7 @@ class _RecipeFormPageState extends ConsumerState<RecipeFormPage> {
     _servings.dispose();
     _ingredients.dispose();
     _steps.dispose();
+    _notes.dispose();
     super.dispose();
   }
 
@@ -130,8 +141,11 @@ class _RecipeFormPageState extends ConsumerState<RecipeFormPage> {
       servings: int.tryParse(_servings.text.trim()) ?? 1,
       ingredients: _splitLines(_ingredients.text),
       steps: _splitLines(_steps.text),
+      notes: _notes.text.trim(),
       photoPath: _photoName,
       clearPhoto: _photoName == null,
+      categoryId: _categoryId,
+      clearCategory: _categoryId == null,
     );
     await ref.read(recipeRepositoryProvider).save(recipe);
     _saved = true;
@@ -139,6 +153,16 @@ class _RecipeFormPageState extends ConsumerState<RecipeFormPage> {
       await _photos.delete(_originalPhoto);
     }
     if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _createCategory(List<RecipeCategory> categories) async {
+    final created = await showCategoryEditor(
+      context,
+      takenLabels: RecipeCategory.takenLabels(categories),
+    );
+    if (created == null) return;
+    await ref.read(categoryRepositoryProvider).save(created);
+    if (mounted) setState(() => _categoryId = created.id);
   }
 
   Widget _photoSection() {
@@ -193,6 +217,7 @@ class _RecipeFormPageState extends ConsumerState<RecipeFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    final categories = ref.watch(allCategoriesProvider);
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -214,6 +239,46 @@ class _RecipeFormPageState extends ConsumerState<RecipeFormPage> {
               decoration: const InputDecoration(labelText: 'Título'),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Indique um título' : null,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String?>(
+              // ignore: deprecated_member_use
+              value: categories.any((c) => c.id == _categoryId) ? _categoryId : null,
+              decoration: const InputDecoration(labelText: 'Categoria'),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('Sem categoria'),
+                ),
+                for (final c in categories)
+                  DropdownMenuItem<String?>(
+                    value: c.id,
+                    child: Row(
+                      children: [
+                        Icon(c.icon, size: 18),
+                        const SizedBox(width: 8),
+                        Text(c.label),
+                      ],
+                    ),
+                  ),
+                const DropdownMenuItem<String?>(
+                  value: _newCategory,
+                  child: Row(
+                    children: [
+                      Icon(Icons.add, size: 18),
+                      SizedBox(width: 8),
+                      Text('Nova categoria…'),
+                    ],
+                  ),
+                ),
+              ],
+              onChanged: (v) {
+                if (v == _newCategory) {
+                  _createCategory(categories);
+                } else {
+                  setState(() => _categoryId = v);
+                }
+              },
             ),
             const SizedBox(height: 16),
             const Text('Modo de preparação'),
@@ -265,6 +330,17 @@ class _RecipeFormPageState extends ConsumerState<RecipeFormPage> {
               maxLines: null,
               decoration: const InputDecoration(
                 labelText: 'Passos (um por linha)',
+                alignLabelWithHint: true,
+              ),
+            ),
+            TextFormField(
+              controller: _notes,
+              minLines: 2,
+              maxLines: null,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Notas pessoais',
+                hintText: 'Ex.: menos sal da próxima vez',
                 alignLabelWithHint: true,
               ),
             ),

@@ -11,6 +11,8 @@ final backupRepositoryProvider = Provider<BackupRepository>(
     recipes: Hive.box(HiveBoxes.recipes),
     plan: Hive.box(HiveBoxes.plan),
     checked: Hive.box(HiveBoxes.shoppingChecked),
+    sectionOverrides: Hive.box(HiveBoxes.sectionOverrides),
+    categories: Hive.box(HiveBoxes.categories),
     photos: ref.watch(photoStorageProvider),
   ),
 );

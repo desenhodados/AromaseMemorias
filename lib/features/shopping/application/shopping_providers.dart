@@ -4,44 +4,60 @@ import 'package:hive/hive.dart';
 import '../../../core/storage/hive_storage.dart';
 import '../../planner/application/plan_providers.dart';
 import '../../planner/domain/meal_type.dart';
+import '../../planner/domain/plan_entry.dart';
 import '../../recipes/application/recipe_providers.dart';
+import '../../recipes/domain/ingredient_scaler.dart';
 import '../../recipes/domain/recipe.dart';
+import '../data/section_overrides_repository.dart';
 import '../data/shopping_repository.dart';
+import '../domain/ingredient_aggregator.dart';
 import '../domain/shopping_item.dart';
+import '../domain/supermarket_section.dart';
 
 final shoppingRepositoryProvider = Provider<ShoppingRepository>(
   (ref) => HiveShoppingRepository(Hive.box(HiveBoxes.shoppingChecked)),
+);
+
+final sectionOverridesRepositoryProvider = Provider<SectionOverridesRepository>(
+  (ref) => HiveSectionOverridesRepository(Hive.box(HiveBoxes.sectionOverrides)),
+);
+
+final sectionOverridesProvider = StreamProvider<Map<String, SupermarketSection>>(
+  (ref) => ref.watch(sectionOverridesRepositoryProvider).watchAll(),
 );
 
 final checkedItemsProvider = StreamProvider<Set<String>>(
   (ref) => ref.watch(shoppingRepositoryProvider).watchChecked(),
 );
 
-/// Ingredientes das refeições planeadas para os próximos 7 dias.
+/// Ingredientes das refeições planeadas para os próximos 7 dias, ajustados às
+/// porções de cada refeição e com as quantidades somadas.
 final shoppingItemsProvider = Provider<List<ShoppingItem>>((ref) {
-  final plan = ref.watch(planProvider).valueOrNull ?? const <String, String>{};
+  final plan = ref.watch(planProvider).valueOrNull ?? const <String, PlanEntry>{};
   final recipes = ref.watch(recipesProvider).valueOrNull ?? const <Recipe>[];
   final checked =
       ref.watch(checkedItemsProvider).valueOrNull ?? const <String>{};
+  final overrides = ref.watch(sectionOverridesProvider).valueOrNull ??
+      const <String, SupermarketSection>{};
 
   final byId = {for (final r in recipes) r.id: r};
   final today = DateTime.now();
-  final counts = <String, int>{};
+  final meals = <List<String>>[];
 
   for (var i = 0; i < 7; i++) {
     final day = today.add(Duration(days: i));
     for (final meal in MealType.values) {
-      final recipe = byId[plan[slotKey(day, meal)]];
-      if (recipe == null) continue;
-      for (final ingredient in recipe.ingredients) {
-        counts.update(ingredient, (v) => v + 1, ifAbsent: () => 1);
-      }
+      final entry = plan[slotKey(day, meal)];
+      final recipe = entry == null ? null : byId[entry.recipeId];
+      if (entry == null || recipe == null) continue;
+      meals.add(
+        scaleIngredients(
+          recipe.ingredients,
+          from: recipe.servings,
+          to: entry.servings ?? recipe.servings,
+        ),
+      );
     }
   }
-
-  final names = counts.keys.toList()..sort();
-  return [
-    for (final n in names)
-      ShoppingItem(name: n, count: counts[n]!, checked: checked.contains(n)),
-  ];
+  return aggregateIngredients(meals, checked: checked, overrides: overrides);
 });

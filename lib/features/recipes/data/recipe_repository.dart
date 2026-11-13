@@ -5,7 +5,13 @@ import '../domain/recipe.dart';
 abstract interface class RecipeRepository {
   Stream<List<Recipe>> watchAll();
   Future<void> save(Recipe recipe);
+
+  /// Guarda várias receitas numa só escrita.
+  Future<void> saveAll(List<Recipe> recipes);
   Future<void> delete(String id);
+
+  /// Apaga várias receitas numa só escrita.
+  Future<void> deleteAll(Iterable<String> ids);
 }
 
 class HiveRecipeRepository implements RecipeRepository {
@@ -33,5 +39,12 @@ class HiveRecipeRepository implements RecipeRepository {
   Future<void> save(Recipe recipe) => _box.put(recipe.id, recipe.toMap());
 
   @override
+  Future<void> saveAll(List<Recipe> recipes) =>
+      _box.putAll({for (final r in recipes) r.id: r.toMap()});
+
+  @override
   Future<void> delete(String id) => _box.delete(id);
+
+  @override
+  Future<void> deleteAll(Iterable<String> ids) => _box.deleteAll(ids);
 }

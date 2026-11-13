@@ -4,6 +4,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../core/widgets/empty_state.dart';
 import '../../recipes/application/recipe_providers.dart';
+import '../../recipes/presentation/recipe_notes_editor.dart';
 import '../application/cooking_providers.dart';
 import '../domain/cooking_timer.dart';
 import '../domain/step_timers.dart';
@@ -79,7 +80,7 @@ class _CookingSessionPageState extends ConsumerState<CookingSessionPage> {
         .start(Duration(minutes: minutes), 'Temporizador · $minutes min');
   }
 
-  void _showIngredients(List<String> ingredients) {
+  void _showIngredients(List<String> ingredients, int servings) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -90,7 +91,10 @@ class _CookingSessionPageState extends ConsumerState<CookingSessionPage> {
           controller: scroll,
           padding: const EdgeInsets.all(20),
           children: [
-            Text('Ingredientes', style: Theme.of(ctx).textTheme.titleLarge),
+            Text(
+              'Ingredientes · $servings porções',
+              style: Theme.of(ctx).textTheme.titleLarge,
+            ),
             const SizedBox(height: 12),
             for (final i in ingredients)
               Padding(
@@ -141,9 +145,21 @@ class _CookingSessionPageState extends ConsumerState<CookingSessionPage> {
           title: Text(recipe.title, maxLines: 1, overflow: TextOverflow.ellipsis),
           actions: [
             IconButton(
+              icon: Icon(
+                recipe.notes.isEmpty
+                    ? Icons.sticky_note_2_outlined
+                    : Icons.sticky_note_2,
+              ),
+              tooltip: 'Notas',
+              onPressed: () => editRecipeNotes(context, ref, recipe),
+            ),
+            IconButton(
               icon: const Icon(Icons.list_alt),
               tooltip: 'Ingredientes',
-              onPressed: () => _showIngredients(recipe.ingredients),
+              onPressed: () => _showIngredients(
+                ref.read(scaledIngredientsProvider(widget.recipeId)),
+                ref.read(servingsOverrideProvider(widget.recipeId)) ?? recipe.servings,
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.timer_outlined),

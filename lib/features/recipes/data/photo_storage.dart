@@ -22,10 +22,16 @@ abstract interface class PhotoStorage {
 
   Future<Uint8List?> readBytes(String name);
 
+  /// Copia uma foto para um ficheiro novo (devolve o nome), ou `null` se não existir.
+  Future<String?> duplicate(String name, {required String recipeId});
+
   /// Usado ao restaurar backups (o nome vem do ficheiro, por isso é validado).
   Future<void> writeNamed(String name, Uint8List bytes);
   Future<void> delete(String? name);
   Future<void> clear();
+
+  /// Nomes de todas as fotos guardadas.
+  Future<List<String>> listNames();
 }
 
 class LocalPhotoStorage implements PhotoStorage {
@@ -86,6 +92,15 @@ class LocalPhotoStorage implements PhotoStorage {
       exists(name) ? fileFor(name).readAsBytes() : null;
 
   @override
+  Future<String?> duplicate(String name, {required String recipeId}) async {
+    final bytes = await readBytes(name);
+    if (bytes == null) return null;
+    final dot = name.lastIndexOf('.');
+    final extension = dot == -1 ? 'jpg' : name.substring(dot + 1);
+    return saveBytes(bytes, recipeId: recipeId, extension: extension);
+  }
+
+  @override
   Future<void> writeNamed(String name, Uint8List bytes) async {
     if (!isValidName(name)) throw ArgumentError.value(name, 'name');
     await fileFor(name).writeAsBytes(bytes, flush: true);
@@ -96,6 +111,18 @@ class LocalPhotoStorage implements PhotoStorage {
     if (name == null || !isValidName(name)) return;
     final file = fileFor(name);
     if (await file.exists()) await file.delete();
+  }
+
+  @override
+  Future<List<String>> listNames() async {
+    final names = <String>[];
+    if (!await _dir.exists()) return names;
+    await for (final e in _dir.list()) {
+      if (e is! File) continue;
+      final name = e.uri.pathSegments.last;
+      if (isValidName(name)) names.add(name);
+    }
+    return names;
   }
 
   @override
@@ -138,6 +165,9 @@ class NoPhotoStorage implements PhotoStorage {
   Future<Uint8List?> readBytes(String name) async => null;
 
   @override
+  Future<String?> duplicate(String name, {required String recipeId}) async => null;
+
+  @override
   Future<void> writeNamed(String name, Uint8List bytes) async {}
 
   @override
@@ -145,4 +175,7 @@ class NoPhotoStorage implements PhotoStorage {
 
   @override
   Future<void> clear() async {}
+
+  @override
+  Future<List<String>> listNames() async => const [];
 }

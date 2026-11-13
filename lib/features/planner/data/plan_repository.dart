@@ -1,11 +1,12 @@
 import 'package:hive/hive.dart';
 
 import '../domain/meal_type.dart';
+import '../domain/plan_entry.dart';
 
 abstract interface class PlanRepository {
-  /// slotKey -> recipeId
-  Stream<Map<String, String>> watchAll();
-  Future<void> assign(DateTime day, MealType meal, String recipeId);
+  /// slotKey -> refeição planeada
+  Stream<Map<String, PlanEntry>> watchAll();
+  Future<void> assign(DateTime day, MealType meal, PlanEntry entry);
   Future<void> clear(DateTime day, MealType meal);
 }
 
@@ -14,12 +15,17 @@ class HivePlanRepository implements PlanRepository {
 
   final Box<dynamic> _box;
 
-  Map<String, String> _readAll() => {
-        for (final k in _box.keys) k as String: _box.get(k) as String,
-      };
+  Map<String, PlanEntry> _readAll() {
+    final result = <String, PlanEntry>{};
+    for (final key in _box.keys) {
+      final entry = PlanEntry.fromRaw(_box.get(key));
+      if (entry != null) result[key as String] = entry;
+    }
+    return result;
+  }
 
   @override
-  Stream<Map<String, String>> watchAll() async* {
+  Stream<Map<String, PlanEntry>> watchAll() async* {
     yield _readAll();
     await for (final _ in _box.watch()) {
       yield _readAll();
@@ -27,8 +33,8 @@ class HivePlanRepository implements PlanRepository {
   }
 
   @override
-  Future<void> assign(DateTime day, MealType meal, String recipeId) =>
-      _box.put(slotKey(day, meal), recipeId);
+  Future<void> assign(DateTime day, MealType meal, PlanEntry entry) =>
+      _box.put(slotKey(day, meal), entry.toRaw());
 
   @override
   Future<void> clear(DateTime day, MealType meal) =>

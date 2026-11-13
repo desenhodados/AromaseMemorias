@@ -1,4 +1,5 @@
 import '../domain/recipe.dart';
+import '../domain/recipe_category.dart';
 import 'recipe_json_ld_parser.dart';
 
 /// Plano B para páginas sem dados estruturados (ex.: blogs): procura os
@@ -59,6 +60,7 @@ abstract final class RecipeHtmlParser {
         ingredients: ingredients,
         steps: steps,
         sourceUrl: sourceUrl,
+        categoryId: RecipeCategory.guess(title)?.id,
       );
     }
     return null;

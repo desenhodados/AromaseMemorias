@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../application/recipe_providers.dart';
 import '../domain/cooking_mode.dart';
+import '../domain/recipe_sort.dart';
 import 'cooking_mode_ui.dart';
+import 'recipe_category_ui.dart';
 import 'recipe_card.dart';
 
 class RecipesPage extends ConsumerWidget {
@@ -15,23 +17,44 @@ class RecipesPage extends ConsumerWidget {
     final filter = ref.watch(recipeFilterProvider);
     final notifier = ref.read(recipeFilterProvider.notifier);
     final recipes = ref.watch(filteredRecipesProvider);
+    final categories = ref.watch(availableCategoriesProvider);
+    final sort = ref.watch(recipeSortProvider);
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: 'Pesquisar receitas ou ingredientes',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(28),
-                borderSide: BorderSide.none,
+          padding: const EdgeInsets.fromLTRB(16, 12, 4, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Pesquisar receitas ou ingredientes',
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(28),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  onChanged: notifier.setQuery,
+                ),
               ),
-              contentPadding: EdgeInsets.zero,
-            ),
-            onChanged: notifier.setQuery,
+              PopupMenuButton<RecipeSort>(
+                icon: const Icon(Icons.sort),
+                tooltip: 'Ordenar',
+                onSelected: ref.read(recipeSortProvider.notifier).choose,
+                itemBuilder: (_) => [
+                  for (final s in RecipeSort.values)
+                    CheckedPopupMenuItem<RecipeSort>(
+                      value: s,
+                      checked: s == sort,
+                      child: Text(s.label),
+                    ),
+                ],
+              ),
+            ],
           ),
         ),
         SingleChildScrollView(
@@ -61,6 +84,23 @@ class RecipesPage extends ConsumerWidget {
             ],
           ),
         ),
+        if (categories.isNotEmpty)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+            child: Row(
+              spacing: 8,
+              children: [
+                for (final c in categories)
+                  ChoiceChip(
+                    avatar: Icon(c.icon, size: 18),
+                    label: Text(c.label),
+                    selected: filter.categoryId == c.id,
+                    onSelected: (v) => notifier.setCategory(v ? c.id : null),
+                  ),
+              ],
+            ),
+          ),
         Expanded(
           child: recipes.when(
             loading: () => const Center(child: CircularProgressIndicator()),

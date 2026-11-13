@@ -3,8 +3,11 @@ import 'dart:typed_data';
 
 import 'package:hive/hive.dart';
 
+import '../../planner/domain/plan_entry.dart';
 import '../../recipes/data/photo_storage.dart';
 import '../../recipes/domain/recipe.dart';
+import '../../recipes/domain/recipe_category.dart';
+import '../../shopping/domain/supermarket_section.dart';
 import '../domain/backup.dart';
 
 abstract interface class BackupRepository {
@@ -18,9 +21,11 @@ abstract interface class BackupRepository {
 
 typedef _ParsedBackup = ({
   Map<String, Map<String, dynamic>> recipes,
-  Map<String, String> plan,
+  Map<String, Object> plan,
   List<String> checked,
   Map<String, Uint8List> photos,
+  Map<String, String> sectionOverrides,
+  List<RecipeCategory> customCategories,
 });
 
 class HiveBackupRepository implements BackupRepository {
@@ -28,10 +33,14 @@ class HiveBackupRepository implements BackupRepository {
     required Box<dynamic> recipes,
     required Box<dynamic> plan,
     required Box<dynamic> checked,
+    required Box<dynamic> sectionOverrides,
+    required Box<dynamic> categories,
     required PhotoStorage photos,
   })  : _recipes = recipes,
         _plan = plan,
         _checked = checked,
+        _overrides = sectionOverrides,
+        _categories = categories,
         _photos = photos;
 
   static const _appId = 'aromas_memorias';
@@ -40,6 +49,8 @@ class HiveBackupRepository implements BackupRepository {
   final Box<dynamic> _recipes;
   final Box<dynamic> _plan;
   final Box<dynamic> _checked;
+  final Box<dynamic> _overrides;
+  final Box<dynamic> _categories;
   final PhotoStorage _photos;
 
   @override
@@ -67,6 +78,12 @@ class HiveBackupRepository implements BackupRepository {
           if (_checked.get(k) == true) k as String,
       ],
       'photos': photos,
+      'sectionOverrides': {
+        for (final k in _overrides.keys) k as String: _overrides.get(k),
+      },
+      'customCategories': [
+        for (final e in _categories.values) Map<String, dynamic>.from(e as Map),
+      ],
     };
     return const JsonEncoder.withIndent('  ').convert(data);
   }
@@ -108,6 +125,8 @@ class HiveBackupRepository implements BackupRepository {
         _recipes.clear(),
         _plan.clear(),
         _checked.clear(),
+        _overrides.clear(),
+        _categories.clear(),
         _photos.clear(),
       ]);
     }
@@ -117,6 +136,10 @@ class HiveBackupRepository implements BackupRepository {
     await _recipes.putAll(parsed.recipes);
     await _plan.putAll(parsed.plan);
     await _checked.putAll({for (final n in parsed.checked) n: true});
+    await _overrides.putAll(parsed.sectionOverrides);
+    await _categories.putAll({
+      for (final c in parsed.customCategories) c.id: c.toMap(),
+    });
 
     return BackupSummary(
       recipes: parsed.recipes.length,
@@ -132,10 +155,11 @@ class HiveBackupRepository implements BackupRepository {
         final recipe = Recipe.fromMap(item as Map);
         recipes[recipe.id] = recipe.toMap();
       }
-      final plan = <String, String>{
-        for (final e in (data['plan'] as Map? ?? const {}).entries)
-          e.key as String: e.value as String,
-      };
+      final plan = <String, Object>{};
+      for (final e in (data['plan'] as Map? ?? const {}).entries) {
+        final entry = PlanEntry.fromRaw(e.value);
+        if (entry != null) plan[e.key as String] = entry.toRaw();
+      }
       final checked = <String>[
         for (final n in data['shoppingChecked'] as List? ?? const []) n as String,
       ];
@@ -145,7 +169,27 @@ class HiveBackupRepository implements BackupRepository {
         if (!LocalPhotoStorage.isValidName(name)) continue;
         photos[name] = base64Decode(e.value as String);
       }
-      return (recipes: recipes, plan: plan, checked: checked, photos: photos);
+      final customCategories = <RecipeCategory>[];
+      for (final item in data['customCategories'] as List? ?? const []) {
+        final c = item is Map ? RecipeCategory.fromMap(item) : null;
+        if (c != null) customCategories.add(c);
+      }
+      final names = SupermarketSection.values.map((s) => s.name).toSet();
+      final sectionOverrides = <String, String>{};
+      for (final e in (data['sectionOverrides'] as Map? ?? const {}).entries) {
+        final value = e.value;
+        if (e.key is String && value is String && names.contains(value)) {
+          sectionOverrides[e.key as String] = value;
+        }
+      }
+      return (
+        recipes: recipes,
+        plan: plan,
+        checked: checked,
+        photos: photos,
+        sectionOverrides: sectionOverrides,
+        customCategories: customCategories,
+      );
     } on TypeError {
       throw const BackupException('O backup está corrompido ou incompleto.');
     } on FormatException {

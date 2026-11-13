@@ -15,6 +15,8 @@ class Recipe {
     this.isFavorite = false,
     this.sourceUrl,
     this.photoPath,
+    this.categoryId,
+    this.notes = '',
   });
 
   final String id;
@@ -30,6 +32,16 @@ class Recipe {
   /// Nome do ficheiro da foto (guardado na pasta de fotos da app).
   final String? photoPath;
 
+  /// Id da categoria (fixa ou personalizada); `null` = sem categoria.
+  final String? categoryId;
+
+  /// Notas pessoais (ex.: "menos sal da próxima vez"); vazio = sem notas.
+  final String notes;
+
+  /// Instante de criação, guardado no próprio id (microssegundos desde 1970);
+  /// 0 se o id não for numérico. Serve para ordenar por "mais recentes".
+  int get createdMicros => int.tryParse(id) ?? 0;
+
   Recipe copyWith({
     String? title,
     Set<CookingMode>? modes,
@@ -41,6 +53,9 @@ class Recipe {
     String? sourceUrl,
     String? photoPath,
     bool clearPhoto = false,
+    String? categoryId,
+    bool clearCategory = false,
+    String? notes,
   }) {
     return Recipe(
       id: id,
@@ -53,6 +68,8 @@ class Recipe {
       isFavorite: isFavorite ?? this.isFavorite,
       sourceUrl: sourceUrl ?? this.sourceUrl,
       photoPath: clearPhoto ? null : (photoPath ?? this.photoPath),
+      categoryId: clearCategory ? null : (categoryId ?? this.categoryId),
+      notes: notes ?? this.notes,
     );
   }
 
@@ -67,6 +84,8 @@ class Recipe {
         'isFavorite': isFavorite,
         'sourceUrl': sourceUrl,
         'photoPath': photoPath,
+        'category': categoryId,
+        'notes': notes,
       };
 
   factory Recipe.fromMap(Map<dynamic, dynamic> map) {
@@ -84,6 +103,8 @@ class Recipe {
       isFavorite: (map['isFavorite'] ?? map['favorite'] ?? false) as bool,
       sourceUrl: map['sourceUrl'] as String?,
       photoPath: map['photoPath'] as String?,
+      categoryId: map['category'] as String?,
+      notes: (map['notes'] as String?) ?? '',
     );
   }
 }

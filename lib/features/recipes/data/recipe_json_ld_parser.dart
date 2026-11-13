@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../domain/cooking_mode.dart';
 import '../domain/recipe.dart';
+import '../domain/recipe_category.dart';
 
 /// Extrai uma receita dos dados estruturados (schema.org/Recipe em JSON-LD)
 /// que a maioria dos sites de receitas inclui no HTML.
@@ -94,6 +95,9 @@ abstract final class RecipeJsonLdParser {
       ingredients: ingredients,
       steps: steps,
       sourceUrl: url,
+      categoryId: RecipeCategory.guess(
+        [title, ..._asList(node['recipeCategory']).whereType<String>()].join(' '),
+      )?.id,
     );
   }
 
