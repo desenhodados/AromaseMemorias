@@ -28,6 +28,12 @@ jobs:
       - name: Gerar suporte web
         run: flutter create . --platforms web --project-name aromas_memorias
 
+      - name: Ícone e cores da app web
+        run: |
+          cp -f web_icons/Icon-*.png web/icons/
+          cp -f web_icons/favicon.png web/favicon.png
+          sed -i 's|"background_color": ".*"|"background_color": "#FFF3E0"|; s|"theme_color": ".*"|"theme_color": "#D84315"|' web/manifest.json
+
       - name: Nome da app na página
         run: |
           sed -i 's|<title>.*</title>|<title>Aromas \& Memórias</title>|' web/index.html
