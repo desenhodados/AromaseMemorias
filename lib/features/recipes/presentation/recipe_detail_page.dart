@@ -9,6 +9,7 @@ import '../application/category_providers.dart';
 import '../application/recipe_deleter.dart';
 import '../application/recipe_duplicator.dart';
 import '../application/recipe_providers.dart';
+import '../domain/recipe.dart';
 import '../domain/recipe_share_text.dart';
 import 'cooking_mode_ui.dart';
 import 'recipe_category_ui.dart';
