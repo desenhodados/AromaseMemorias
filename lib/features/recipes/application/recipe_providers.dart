@@ -27,7 +27,7 @@ final photoPickerProvider = Provider<PhotoPicker>(
 final recipeImporterProvider = Provider<RecipeImporter>(
   (ref) => HttpRecipeImporter(
     photos: ref.watch(photoStorageProvider),
-    proxyPrefix: kIsWeb ? AppInfo.webProxyPrefix : null,
+    proxyPrefixes: kIsWeb ? AppInfo.webProxyPrefixes : const [],
   ),
 );
 

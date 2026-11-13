@@ -88,7 +88,7 @@ abstract final class RecipeJsonLdParser {
     return Recipe(
       id: id,
       title: title,
-      modes: _guessModes('$title ${_text(node['description'])} ${steps.join(' ')}'),
+      modes: guessModes('$title ${_text(node['description'])} ${steps.join(' ')}'),
       minutes: minutes,
       servings: _servings(node['recipeYield']),
       ingredients: ingredients,
@@ -97,7 +97,7 @@ abstract final class RecipeJsonLdParser {
     );
   }
 
-  static Set<CookingMode> _guessModes(String text) {
+  static Set<CookingMode> guessModes(String text) {
     final t = text.toLowerCase();
     final modes = <CookingMode>{
       if (t.contains('airfryer') ||
@@ -148,6 +148,9 @@ abstract final class RecipeJsonLdParser {
 
   static List<Object?> _asList(Object? v) =>
       v is List ? v : (v is String ? [v] : const []);
+
+  /// Remove etiquetas HTML, converte entidades e normaliza espaços.
+  static String cleanText(String s) => _clean(s);
 
   static String _text(Object? v) => v is String ? _clean(v) : '';
 

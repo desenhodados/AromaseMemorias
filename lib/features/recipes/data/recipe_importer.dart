@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../domain/recipe.dart';
 import 'photo_storage.dart';
+import 'recipe_html_parser.dart';
 import 'recipe_json_ld_parser.dart';
 
 class RecipeImportException implements Exception {
@@ -29,10 +30,10 @@ class HttpRecipeImporter implements RecipeImporter {
   HttpRecipeImporter({
     required PhotoStorage photos,
     http.Client? client,
-    String? proxyPrefix,
+    List<String> proxyPrefixes = const [],
   })  : _photos = photos,
         _client = client ?? http.Client(),
-        _proxyPrefix = proxyPrefix;
+        _proxyPrefixes = proxyPrefixes;
 
   static const _headers = {
     'User-Agent': 'Mozilla/5.0 (compatible; AromasMemorias/1.0)',
@@ -43,12 +44,9 @@ class HttpRecipeImporter implements RecipeImporter {
   final PhotoStorage _photos;
   final http.Client _client;
 
-  /// Se definido, os pedidos passam por este proxy (usado na web por causa do CORS).
-  final String? _proxyPrefix;
-
-  Uri _viaProxy(Uri uri) => _proxyPrefix == null
-      ? uri
-      : Uri.parse('$_proxyPrefix${Uri.encodeComponent(uri.toString())}');
+  /// Na web, os pedidos passam por estes proxies (por causa do CORS); se um
+  /// falhar, tenta o seguinte. Vazio = pedido direto (telemóvel).
+  final List<String> _proxyPrefixes;
 
   @override
   Future<Recipe> importFromUrl(String url) async {
@@ -58,50 +56,62 @@ class HttpRecipeImporter implements RecipeImporter {
       throw const RecipeImportException('Link inválido. Cole o endereço completo, com https://');
     }
 
-    final http.Response response;
-    try {
-      response = await _client
-          .get(_viaProxy(uri), headers: _proxyPrefix == null ? _headers : const {})
-          .timeout(const Duration(seconds: 15));
-    } on TimeoutException {
-      throw const RecipeImportException(
-        'O site demorou demasiado a responder. Tente novamente.',
-      );
-    } on TlsException catch (e) {
-      throw RecipeImportException(
-        'Não foi possível estabelecer uma ligação segura com o site.',
-        details: '$e',
-      );
-    } on Exception catch (e) {
-      throw RecipeImportException(
-        'Não foi possível ligar ao site. Verifique a internet e, no Android, '
-        'a permissão INTERNET no AndroidManifest.xml (ver README).',
-        details: '$e',
-      );
-    }
-    if (response.statusCode != 200) {
-      throw RecipeImportException(
-        'O site respondeu com erro (${response.statusCode}).',
-        details: 'HTTP ${response.statusCode} em $uri',
-      );
-    }
-
-    final html = utf8.decode(response.bodyBytes, allowMalformed: true);
-    final recipe = RecipeJsonLdParser.parse(
-      html,
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      sourceUrl: uri.toString(),
-    );
+    final html = await _fetchHtml(uri);
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final recipe =
+        RecipeJsonLdParser.parse(html, id: id, sourceUrl: uri.toString()) ??
+            RecipeHtmlParser.parse(html, id: id, sourceUrl: uri.toString());
     if (recipe == null) {
       throw const RecipeImportException(
         'Não encontrei uma receita nesta página. Tente outro site ou use "Nova receita".',
       );
     }
 
-    final imageUrl = RecipeJsonLdParser.imageUrl(html);
+    final imageUrl =
+        RecipeJsonLdParser.imageUrl(html) ?? RecipeHtmlParser.imageUrl(html);
     if (imageUrl == null || !_photos.isSupported) return recipe;
     final photo = await _downloadPhoto(uri, imageUrl, recipe.id);
     return photo == null ? recipe : recipe.copyWith(photoPath: photo);
+  }
+
+  Future<String> _fetchHtml(Uri uri) async {
+    final viaProxy = _proxyPrefixes.isNotEmpty;
+    final targets = viaProxy
+        ? [
+            for (final p in _proxyPrefixes)
+              Uri.parse('$p${Uri.encodeComponent(uri.toString())}'),
+          ]
+        : [uri];
+
+    final errors = <String>[];
+    var message = 'Não foi possível ligar ao site.';
+
+    for (final target in targets) {
+      try {
+        final response = await _client
+            .get(target, headers: viaProxy ? const {} : _headers)
+            .timeout(const Duration(seconds: 15));
+        if (response.statusCode == 200) {
+          return utf8.decode(response.bodyBytes, allowMalformed: true);
+        }
+        errors.add('${target.host}: HTTP ${response.statusCode}');
+        message = viaProxy
+            ? 'O serviço intermédio não conseguiu obter a página (erro ${response.statusCode}). '
+                'Tente mais tarde ou use a app do telemóvel.'
+            : 'O site respondeu com erro (${response.statusCode}).';
+      } on TimeoutException {
+        errors.add('${target.host}: tempo esgotado');
+        message = 'O site demorou demasiado a responder. Tente novamente.';
+      } on TlsException catch (e) {
+        errors.add('${target.host}: $e');
+        message = 'Não foi possível estabelecer uma ligação segura com o site.';
+      } on Exception catch (e) {
+        errors.add('${target.host}: $e');
+        message = 'Não foi possível ligar ao site. Verifique a internet e, no Android, '
+            'a permissão INTERNET no AndroidManifest.xml (ver README).';
+      }
+    }
+    throw RecipeImportException(message, details: '${errors.join(' | ')} (pedido: $uri)');
   }
 
   /// A foto é opcional: qualquer falha é ignorada.
