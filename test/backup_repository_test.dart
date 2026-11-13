@@ -20,6 +20,8 @@ void main() {
   late Box<dynamic> recipes;
   late Box<dynamic> plan;
   late Box<dynamic> checked;
+  late Box<dynamic> overrides;
+  late Box<dynamic> categories;
   late HiveBackupRepository repo;
   late LocalPhotoStorage photos;
 
@@ -28,11 +30,15 @@ void main() {
     recipes = await Hive.openBox('recipes');
     plan = await Hive.openBox('plan');
     checked = await Hive.openBox('checked');
+    overrides = await Hive.openBox('overrides');
+    categories = await Hive.openBox('categories');
     photos = LocalPhotoStorage(Directory.systemTemp.createTempSync('photos'));
     repo = HiveBackupRepository(
       recipes: recipes,
       plan: plan,
       checked: checked,
+      sectionOverrides: overrides,
+      categories: categories,
       photos: photos,
     );
   });
@@ -88,5 +94,43 @@ void main() {
 
     expect(Recipe.fromMap(recipes.get('1') as Map).photoPath, name);
     expect(await photos.readBytes(name), [9, 8, 7]);
+  });
+
+  test('o planeamento com porções viaja no backup', () async {
+    await plan.put('2026-11-01|lunch', {'recipeId': '1', 'servings': 6});
+    await plan.put('2026-11-01|dinner', '2');
+    final json = await repo.exportJson();
+
+    await plan.clear();
+    await repo.restore(json, replace: false);
+
+    expect((plan.get('2026-11-01|lunch') as Map)['servings'], 6);
+    expect(plan.get('2026-11-01|dinner'), '2');
+  });
+
+  test('as secções escolhidas viajam no backup (ignorando as inválidas)', () async {
+    await overrides.put('atum', 'pantry');
+    final json = await repo.exportJson();
+
+    await overrides.clear();
+    await repo.restore(
+      json.replaceFirst('"atum": "pantry"', '"atum": "pantry", "xpto": "nada"'),
+      replace: false,
+    );
+
+    expect(overrides.get('atum'), 'pantry');
+    expect(overrides.containsKey('xpto'), isFalse);
+  });
+
+  test('as categorias personalizadas viajam no backup', () async {
+    await categories.put('c1', {'id': 'c1', 'label': 'Festas', 'iconKey': 'celebration'});
+    await recipes.put('1', _recipe('1', 'Bolo').copyWith(categoryId: 'c1').toMap());
+    final json = await repo.exportJson();
+
+    await Future.wait([categories.clear(), recipes.clear()]);
+    await repo.restore(json, replace: false);
+
+    expect((categories.get('c1') as Map)['label'], 'Festas');
+    expect(Recipe.fromMap(recipes.get('1') as Map).categoryId, 'c1');
   });
 }

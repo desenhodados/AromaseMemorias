@@ -19,6 +19,12 @@ void main() {
     expect(repo.themeMode, ThemeMode.system);
   });
 
+  test('guarda e lê a ordem da lista de receitas', () async {
+    expect(repo.recipeSortName, isNull);
+    await repo.setRecipeSortName('newest');
+    expect(repo.recipeSortName, 'newest');
+  });
+
   test('guarda e lê o tema escolhido', () async {
     await repo.setThemeMode(ThemeMode.dark);
     expect(repo.themeMode, ThemeMode.dark);
