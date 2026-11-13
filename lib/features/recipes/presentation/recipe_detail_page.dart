@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../cooking/presentation/cooking_session_page.dart';
 import '../application/recipe_providers.dart';
 import 'cooking_mode_ui.dart';
 import 'recipe_form_page.dart';
@@ -85,6 +86,19 @@ class RecipeDetailPage extends ConsumerWidget {
           const SizedBox(height: 8),
           Text('${recipe.minutes} min · ${recipe.servings} porções'),
           const SizedBox(height: 16),
+          if (recipe.steps.isNotEmpty) ...[
+            FilledButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => CookingSessionPage(recipeId: recipe.id),
+                ),
+              ),
+              icon: const Icon(Icons.restaurant_menu),
+              label: const Text('Modo de cozinhar'),
+            ),
+            const SizedBox(height: 16),
+          ],
           Text('Ingredientes', style: text.titleMedium),
           const SizedBox(height: 4),
           for (final i in recipe.ingredients) Text('• $i'),
